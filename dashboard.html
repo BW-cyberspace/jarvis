@@ -355,9 +355,12 @@ function startSpeaking(){
   audio.currentTime = 0;
   const p = audio.play();
   if(p && p.catch) p.catch(()=>{ /* no audio file — synthetic envelope still runs */ });
+  // The timer is only a fallback for when no audio file exists; once real
+  // audio is playing, the 'ended' event owns the stop.
   clearTimeout(fallbackTimer);
   fallbackTimer = setTimeout(stopSpeaking, SPEAK_FALLBACK_MS);
 }
+audio.addEventListener("playing", ()=> clearTimeout(fallbackTimer));
 function stopSpeaking(){
   speaking = false;
   btn.classList.remove("speaking");
@@ -396,13 +399,20 @@ function pickVoice(){
 function speakText(text){
   stopSpeaking();
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  const v = pickVoice(); if(v) u.voice = v;
-  u.rate = 1.02; u.pitch = 0.92;
-  u.onstart = ()=>{ speaking = true; speakT0 = performance.now(); talkBtn.classList.add("speaking"); };
+  // Chrome silently stops a single utterance after ~15s, so split into
+  // sentences and queue them — each utterance stays well under the limit.
+  const chunks = text.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g) || [text];
+  const v = pickVoice();
   const done = ()=>{ speaking = false; talkBtn.classList.remove("speaking"); };
-  u.onend = done; u.onerror = done;
-  speechSynthesis.speak(u);
+  chunks.forEach((chunk, i)=>{
+    const u = new SpeechSynthesisUtterance(chunk.trim());
+    if(v) u.voice = v;
+    u.rate = 1.02; u.pitch = 0.92;
+    if(i===0) u.onstart = ()=>{ speaking = true; speakT0 = performance.now(); talkBtn.classList.add("speaking"); };
+    if(i===chunks.length-1){ u.onend = done; }
+    u.onerror = done;
+    speechSynthesis.speak(u);
+  });
 }
 
 function respond(text){

@@ -128,7 +128,7 @@
     padding:0 30px;pointer-events:auto;
     background:linear-gradient(180deg,transparent 0%,rgba(5,16,32,.85) 40%);
     border-top:1px solid rgba(77,225,255,.14)}
-  #briefBtn{
+  #briefBtn,#talkBtn{
     pointer-events:auto;cursor:pointer;flex:none;
     font-family:var(--disp);font-weight:700;font-size:13px;letter-spacing:.3em;
     color:var(--cyan-hi);background:rgba(10,35,60,.55);
@@ -137,9 +137,14 @@
     box-shadow:0 0 18px rgba(77,225,255,.35), inset 0 0 14px rgba(77,225,255,.12);
     transition:box-shadow .3s,color .3s;
   }
-  #briefBtn:hover{box-shadow:0 0 30px rgba(77,225,255,.7), inset 0 0 20px rgba(77,225,255,.2)}
-  #briefBtn.speaking{color:#fff;animation:speakGlow .9s ease-in-out infinite}
+  #briefBtn:hover,#talkBtn:hover{box-shadow:0 0 30px rgba(77,225,255,.7), inset 0 0 20px rgba(77,225,255,.2)}
+  #briefBtn.speaking,#talkBtn.speaking{color:#fff;animation:speakGlow .9s ease-in-out infinite}
   @keyframes speakGlow{50%{box-shadow:0 0 34px rgba(77,225,255,.9), inset 0 0 22px rgba(77,225,255,.3)}}
+  #talkBtn.listening{
+    color:#ffd166;border-color:#ffd166;
+    animation:listenGlow .9s ease-in-out infinite;
+  }
+  @keyframes listenGlow{50%{box-shadow:0 0 34px rgba(255,209,102,.85), inset 0 0 22px rgba(255,209,102,.3)}}
 
   .ticker{flex:1;overflow:hidden;white-space:nowrap;mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
   .ticker .reel{display:inline-block;padding-left:100%;animation:reel 26s linear infinite;
@@ -195,6 +200,7 @@
 
   <div class="botbar">
     <button id="briefBtn">▶&nbsp; BRIEF ME</button>
+    <button id="talkBtn">🎙&nbsp; TALK</button>
     <div class="ticker"><span class="reel" id="reel"></span></div>
     <div class="closer" id="closer">—</div>
   </div>
@@ -361,6 +367,175 @@ function stopSpeaking(){
 }
 btn.addEventListener("click", ()=> speaking ? stopSpeaking() : startSpeaking());
 audio.addEventListener("ended", stopSpeaking);
+
+/* ================= voice interaction ================= */
+const talkBtn = $("#talkBtn");
+const chatLog = [];   // conversation history for Claude
+
+function logLine(html){
+  const ul = $("#logList");
+  const li = document.createElement("li");
+  const t = new Date(), p = n=>String(n).padStart(2,"0");
+  li.innerHTML = `<span class="t">${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())}</span>` + html;
+  ul.appendChild(li);
+  requestAnimationFrame(()=>li.classList.add("in"));
+  while(ul.children.length>10) ul.removeChild(ul.firstChild);
+}
+
+/* --- speech output: browser TTS, prefers a British male voice --- */
+function pickVoice(){
+  const voices = speechSynthesis.getVoices();
+  const prefs = ["Daniel","Microsoft Ryan","Microsoft George","Google UK English Male"];
+  for(const name of prefs){
+    const v = voices.find(v=>v.name.includes(name));
+    if(v) return v;
+  }
+  return voices.find(v=>v.lang==="en-GB") || null;
+}
+
+function speakText(text){
+  stopSpeaking();
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice(); if(v) u.voice = v;
+  u.rate = 1.02; u.pitch = 0.92;
+  u.onstart = ()=>{ speaking = true; speakT0 = performance.now(); talkBtn.classList.add("speaking"); };
+  const done = ()=>{ speaking = false; talkBtn.classList.remove("speaking"); };
+  u.onend = done; u.onerror = done;
+  speechSynthesis.speak(u);
+}
+
+function respond(text){
+  logLine("JARVIS: <b>"+text.replace(/</g,"&lt;")+"</b>");
+  speakText(text);
+}
+
+/* --- speech input: Web Speech API (Chrome / Edge) --- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+
+function listen(){
+  if(!SR){ respond("Voice input requires Chrome or Edge, sir."); return; }
+  if(listening){ rec && rec.stop(); return; }
+  speechSynthesis.cancel(); stopSpeaking();
+  rec = new SR();
+  rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1;
+  listening = true;
+  talkBtn.classList.add("listening");
+  talkBtn.innerHTML = "●&nbsp; LISTENING";
+  rec.onresult = e=>{
+    const q = e.results[0][0].transcript.trim();
+    logLine("You: <b>"+q.replace(/</g,"&lt;")+"</b>");
+    handleUtterance(q);
+  };
+  rec.onerror = e=>{
+    if(e.error==="not-allowed") respond("I need microphone permission, sir.");
+    else if(e.error!=="aborted" && e.error!=="no-speech") logLine("Mic error: <b>"+e.error+"</b>");
+  };
+  rec.onend = ()=>{
+    listening = false;
+    talkBtn.classList.remove("listening");
+    talkBtn.innerHTML = "🎙&nbsp; TALK";
+  };
+  rec.start();
+}
+talkBtn.addEventListener("click", listen);
+
+/* --- command brain: free, offline --- */
+function handleUtterance(q){
+  const s = q.toLowerCase();
+  const offline = D.connectors.filter(c=>c.status!=="online").map(c=>c.name);
+
+  if(/\b(stop|quiet|cancel|never ?mind|shut up)\b/.test(s)){
+    speechSynthesis.cancel(); stopSpeaking(); return;
+  }
+  if(/\bbrief\b/.test(s)){ startSpeaking(); return; }
+  if(/\b(priorit|task|to.?do|what should i)\b/.test(s)){
+    respond("You have "+D.priorities.length+" priorities. "+
+      D.priorities.map((p,i)=>"Number "+(i+1)+": "+p+".").join(" "));
+    return;
+  }
+  if(/\b(status|systems?|connector|online|diagnostic)\b/.test(s)){
+    respond(offline.length
+      ? (D.connectors.length-offline.length)+" of "+D.connectors.length+" connectors online. "+offline.join(", ")+" "+(offline.length>1?"are":"is")+" degraded, sir."
+      : "All "+D.connectors.length+" connectors online. Systems nominal, sir.");
+    return;
+  }
+  if(/\b(headline|news|top story)\b/.test(s)){ respond(D.headline.toLowerCase()+"."); return; }
+  if(/\b(sponsor|revenue|money|pipeline|paid)\b/.test(s)){
+    const total = D.sponsors.reduce((a,x)=>a+x.amount,0);
+    respond("Sponsor pipeline is valued at "+total.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0})+". "+
+      D.sponsors.map(x=>x.name+", "+x.amount.toLocaleString()+" dollars, "+x.status.replace("_"," ")+".").join(" "));
+    return;
+  }
+  if(/\b(time|clock)\b/.test(s)){
+    const t = new Date();
+    respond("It is "+t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})+", sir.");
+    return;
+  }
+  if(/\b(api ?key|configure|settings)\b/.test(s)){ promptApiKey(); return; }
+  if(/\b(help|what can you)\b/.test(s)){
+    respond("You can ask for the brief, priorities, status, headline, sponsors, or the time. "+
+      (getApiKey() ? "And with the uplink active, you may ask me anything, sir."
+                   : "Say 'set API key' to activate the full conversational uplink, sir."));
+    return;
+  }
+  // no command matched — full AI conversation if the uplink is configured
+  if(getApiKey()) askClaude(q);
+  else respond("That's beyond my command set, sir. Say 'set API key' to activate the full conversational uplink.");
+}
+
+/* --- Claude uplink: real AI conversations (optional) --- */
+function getApiKey(){ return localStorage.getItem("jarvis_api_key") || ""; }
+function promptApiKey(){
+  const k = prompt("Paste your Anthropic API key (stored only in this browser, sent only to api.anthropic.com).\nGet one at console.anthropic.com → API keys.\nLeave empty to clear.", getApiKey());
+  if(k===null) return;
+  if(k.trim()){ localStorage.setItem("jarvis_api_key", k.trim()); respond("Uplink configured. Ask me anything, sir."); }
+  else { localStorage.removeItem("jarvis_api_key"); respond("Uplink disengaged, sir."); }
+}
+
+async function askClaude(q){
+  chatLog.push({role:"user", content:q});
+  while(chatLog.length>12) chatLog.shift();
+  talkBtn.innerHTML = "◌&nbsp; THINKING";
+  try{
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key":getApiKey(),
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify({
+        model:"claude-opus-5",
+        max_tokens:300,
+        system:"You are J.A.R.V.I.S., a composed British AI butler assisting your principal, whom you address as 'sir'. "+
+          "Replies are spoken aloud: 1-3 short sentences, plain text, no markdown, no lists, no emoji. Dry wit welcome. "+
+          "Current dashboard data: "+JSON.stringify(window.JARVIS_DATA),
+        messages:chatLog
+      })
+    });
+    if(!res.ok){
+      if(res.status===401){ respond("The uplink key was rejected, sir. Say 'set API key' to update it."); return; }
+      throw new Error("API "+res.status);
+    }
+    const data = await res.json();
+    if(data.stop_reason==="refusal"){ respond("I'm afraid I can't assist with that, sir."); return; }
+    const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join(" ").trim();
+    if(!text) throw new Error("empty response");
+    chatLog.push({role:"assistant", content:text});
+    respond(text);
+  }catch(err){
+    respond("The uplink appears to be down, sir. "+(navigator.onLine?"":"You are offline."));
+    console.error(err);
+  }finally{
+    if(!listening) talkBtn.innerHTML = "🎙&nbsp; TALK";
+  }
+}
+
+/* voices load asynchronously in Chrome */
+if("speechSynthesis" in window) speechSynthesis.onvoiceschanged = ()=>{};
 
 /* synthetic speech envelope — deterministic, works with no audio file */
 function speechEnv(tMs){

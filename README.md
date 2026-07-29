@@ -23,6 +23,21 @@ embedded as data URIs, so it works fully offline.
 Just open `dashboard.html`. Click **BRIEF ME** — the sphere pulses to a
 speech envelope; if `jarvis_brief.wav` (or `.mp3`) exists it plays too.
 
+## Talk to JARVIS
+
+Click **🎙 TALK** (Chrome or Edge — uses the built-in Web Speech API) and speak.
+
+- **Free command mode** — always on, no account needed. Understands: *brief
+  me*, *what are my priorities*, *status report*, *read the headline*,
+  *sponsors*, *what time is it*, *help*, *stop*. Answers come from
+  `jarvis_data.js`, spoken in a British voice via the browser's own TTS.
+- **Full conversations (optional)** — say *"set API key"* and paste an
+  Anthropic API key (console.anthropic.com → API keys). Anything outside the
+  command set is then answered by Claude in the JARVIS persona, with the live
+  dashboard data as context. The key is stored only in your browser's
+  localStorage and sent only to api.anthropic.com; short replies cost well
+  under a cent each. Say *"set API key"* again and leave it empty to clear.
+
 ## Generate the voice brief — Kokoro (free, offline)
 
 ```bash

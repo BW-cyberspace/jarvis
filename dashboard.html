@@ -205,7 +205,10 @@
 <div class="scanlines"></div>
 <div class="vignette"></div>
 
-<audio id="briefAudio" src="jarvis_brief.mp3" preload="auto" hidden></audio>
+<audio id="briefAudio" preload="auto" hidden>
+  <source src="jarvis_brief.wav" type="audio/wav">
+  <source src="jarvis_brief.mp3" type="audio/mpeg">
+</audio>
 
 <script src="jarvis_data.js"></script>
 <script>

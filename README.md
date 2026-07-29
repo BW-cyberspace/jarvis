@@ -13,16 +13,31 @@ embedded as data URIs, so it works fully offline.
 |---|---|
 | `dashboard.html` | The whole app — open it in any browser. |
 | `jarvis_data.js` | All HUD copy: greeting, connectors, funnel, sponsors, priorities, headline, closer. Edit this to redress the dashboard. |
-| `generate_brief.js` | Sends the brief text to Fish Audio TTS and saves `jarvis_brief.mp3`. |
+| `generate_brief_kokoro.js` | Speaks the brief with Kokoro-82M — free, offline, no API key. Saves `jarvis_brief.wav`. |
+| `generate_brief.js` | Alternative: sends the brief text to Fish Audio TTS (paid API) and saves `jarvis_brief.mp3`. |
 | `voice_sample.mp3` | Reference sample used to create the "rakip klon" voice on Fish Audio. |
-| `jarvis_brief.mp3` | (generated) The spoken brief. If absent, BRIEF ME still animates via a synthetic speech envelope. |
+| `jarvis_brief.wav` / `.mp3` | (generated) The spoken brief. If absent, BRIEF ME still animates via a synthetic speech envelope. |
 
 ## Run
 
 Just open `dashboard.html`. Click **BRIEF ME** — the sphere pulses to a
-speech envelope; if `jarvis_brief.mp3` exists it plays too.
+speech envelope; if `jarvis_brief.wav` (or `.mp3`) exists it plays too.
 
-## Generate the voice brief
+## Generate the voice brief — Kokoro (free, offline)
+
+```bash
+npm install
+node generate_brief_kokoro.js
+```
+
+- First run downloads the ~90 MB Kokoro-82M model from Hugging Face; after
+  that it's fully offline. No account, no API key.
+- Default voice is `bm_george` (British male). Pick another with
+  `KOKORO_VOICE=bm_daniel node generate_brief_kokoro.js` — try `bm_lewis`,
+  `bm_fable`, `am_michael`, `af_heart`, `bf_emma`.
+- Pass custom text as a CLI argument to override the composed brief.
+
+## Generate the voice brief — Fish Audio (voice clone)
 
 ```bash
 FISH_API_KEY=<your key> FISH_VOICE_ID=<voice model id> node generate_brief.js

@@ -31,6 +31,12 @@ Click **🎙 TALK** (Chrome or Edge — uses the built-in Web Speech API) and sp
   me*, *what are my priorities*, *status report*, *read the headline*,
   *sponsors*, *what time is it*, *help*, *stop*. Answers come from
   `jarvis_data.js`, spoken in a British voice via the browser's own TTS.
+- **Browser commands** — JARVIS can drive the browser by voice: *open
+  YouTube* (also Gmail, GitHub, Calendar, Drive, Stripe, Twitch, and more),
+  *open some-site.com*, *search for &lt;anything&gt;*, *play &lt;something&gt; on
+  YouTube*. Tabs open in the background — the first time, Chrome may show a
+  blocked-pop-up icon in the address bar; click it and choose "always allow"
+  for this page.
 - **Full conversations (optional)** — say *"set API key"* and paste an
   Anthropic API key (console.anthropic.com → API keys). Anything outside the
   command set is then answered by Claude in the JARVIS persona, with the live

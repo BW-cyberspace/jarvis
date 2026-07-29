@@ -483,9 +483,48 @@ function handleUtterance(q){
     respond("It is "+t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})+", sir.");
     return;
   }
+
+  /* --- browser actions --- */
+  const SITES = {
+    "youtube":"https://www.youtube.com","youtube studio":"https://studio.youtube.com",
+    "gmail":"https://mail.google.com","google":"https://www.google.com",
+    "calendar":"https://calendar.google.com","drive":"https://drive.google.com",
+    "docs":"https://docs.google.com","maps":"https://maps.google.com",
+    "github":"https://github.com","reddit":"https://www.reddit.com",
+    "twitter":"https://x.com","x":"https://x.com","instagram":"https://www.instagram.com",
+    "tiktok":"https://www.tiktok.com","twitch":"https://www.twitch.tv",
+    "netflix":"https://www.netflix.com","spotify":"https://open.spotify.com",
+    "amazon":"https://www.amazon.com","discord":"https://discord.com/app",
+    "stripe":"https://dashboard.stripe.com","fish audio":"https://fish.audio"
+  };
+  function openUrl(url, what){
+    const w = window.open(url, "_blank");
+    if(w) respond("Opening "+what+", sir.");
+    else respond("The browser blocked the pop-up, sir. Click the blocked-pop-up icon in the address bar and allow them for this page.");
+  }
+  let m;
+  if((m = s.match(/\b(?:youtube|play)\b.*?\b(?:search(?: for)?|find|play)\s+(.+)/)) ||
+     (m = s.match(/^play\s+(.+?)(?:\s+on\s+youtube)?$/))){
+    openUrl("https://www.youtube.com/results?search_query="+encodeURIComponent(m[1]), "YouTube results for "+m[1]);
+    return;
+  }
+  if((m = s.match(/\b(?:search(?:\s+the\s+web)?\s+for|google|look\s+up)\s+(.+)/))){
+    openUrl("https://www.google.com/search?q="+encodeURIComponent(m[1]), "a search for "+m[1]);
+    return;
+  }
+  if((m = s.match(/^(?:open|go\s+to|take\s+me\s+to|launch|pull\s+up)\s+(.+)/))){
+    const target = m[1].replace(/[.?!]+$/,"").trim();
+    const key = Object.keys(SITES).sort((a,b)=>b.length-a.length)
+      .find(k=>target===k || target.startsWith(k+" ") || target.endsWith(" "+k));
+    if(key){ openUrl(SITES[key], key); return; }
+    if(/\w+\.\w{2,}/.test(target)){ openUrl("https://"+target.replace(/\s+/g,""), target); return; }
+    openUrl("https://www.google.com/search?q="+encodeURIComponent(target), "a search for "+target);
+    return;
+  }
   if(/\b(api ?key|configure|settings)\b/.test(s)){ promptApiKey(); return; }
   if(/\b(help|what can you)\b/.test(s)){
     respond("You can ask for the brief, priorities, status, headline, sponsors, or the time. "+
+      "I can also drive the browser: say 'open YouTube', 'search for' something, or 'play' something on YouTube. "+
       (getApiKey() ? "And with the uplink active, you may ask me anything, sir."
                    : "Say 'set API key' to activate the full conversational uplink, sir."));
     return;

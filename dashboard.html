@@ -227,7 +227,24 @@ const D = window.JARVIS_DATA || {
 
 /* ================= HUD population ================= */
 const $ = s=>document.querySelector(s);
-$("#greeting").textContent = D.greeting;
+
+/* the salutation is computed from the clock — jarvis_data.js only carries the status tail */
+const timeGreeting = ()=>{
+  const h = new Date().getHours();
+  return h<12 ? "Good morning, sir." : h<18 ? "Good afternoon, sir." : "Good evening, sir.";
+};
+
+/* priorities: live list — set by voice, stored in this browser; file entries are defaults */
+function getPriorities(){
+  try{ const p = JSON.parse(localStorage.getItem("jarvis_priorities")||"null"); if(Array.isArray(p)) return p; }catch(_){}
+  return D.priorities || [];
+}
+function savePriorities(list){
+  localStorage.setItem("jarvis_priorities", JSON.stringify(list));
+  const el = document.querySelector("#prioCount"); if(el) el.textContent = String(list.length);
+}
+
+$("#greeting").textContent = timeGreeting()+" "+D.greeting;
 $("#genDate").textContent  = "GENERATED · " + D.generated;
 $("#closer").textContent   = D.closer;
 
@@ -278,13 +295,14 @@ const fmt$ = n => "$" + n.toLocaleString("en-US");
     [views, "VIEWS · 7D"],
     [fmt$(pipeline), "SPONSOR PIPELINE"],
     [subs, "NEW SUBSCRIBERS"],
-    [String(D.priorities.length), "OPEN PRIORITIES"]
+    [String(getPriorities().length), "OPEN PRIORITIES"]
   ];
   const fb = $("#figures");
   figs.forEach(([v,u])=>{
     const el = document.createElement("div");
     el.className = "fig";
-    el.innerHTML = `<div class="v">${v}</div><div class="u">${u}</div>`;
+    const vid = u==="OPEN PRIORITIES" ? ' id="prioCount"' : '';
+    el.innerHTML = `<div class="v"${vid}>${v}</div><div class="u">${u}</div>`;
     fb.appendChild(el);
   });
   const due = D.sponsors.find(s=>s.status==="payment_due");
@@ -311,11 +329,11 @@ const fmt$ = n => "$" + n.toLocaleString("en-US");
 {
   const offline = D.connectors.filter(c=>c.status!=="online").map(c=>c.name);
   const lines = [
-    D.greeting,
+    timeGreeting()+" "+D.greeting,
     `Connectors linked: <b>${D.connectors.filter(c=>c.status==="online").length}/${D.connectors.length}</b>`
       + (offline.length? ` — <b>${offline.join(", ")}</b> degraded`:""),
     `Content funnel synced — <b>${(D.content.funnel[0]||{}).value||""}</b> impressions scanned`,
-    ...D.priorities.map(p=>"Priority: <b>"+p+"</b>"),
+    ...getPriorities().map(p=>"Priority: <b>"+p+"</b>"),
     `Sponsor pipeline valued at <b>${fmt$(D.sponsors.reduce((a,s)=>a+s.amount,0))}</b>`,
     "Awaiting your instruction, sir."
   ];
@@ -503,6 +521,16 @@ talkBtn.addEventListener("click", ()=>{
 setTalkLabel();
 if(wakeMode) setTimeout(startRec, 800);   // resume always-on across page reloads
 
+/* watchdog: keep always-on genuinely always on. Chrome drops continuous
+   recognition sessions, a failed start previously never retried, and a lost
+   speech-synthesis end event could leave the mic muted forever. Every 4s:
+   un-stick the mute if nothing is actually speaking, and re-arm the mic. */
+setInterval(()=>{
+  if(!wakeMode) return;
+  if(micPaused && !speaking && !speechSynthesis.speaking && audio.paused) micPaused = false;
+  if(!micPaused && !listening) startRec();
+}, 4000);
+
 /* --- command brain: free, offline --- */
 function handleUtterance(q){
   const s = q.toLowerCase();
@@ -514,9 +542,37 @@ function handleUtterance(q){
     speechSynthesis.cancel(); stopSpeaking(); return;
   }
   if(/\bbrief\b/.test(s)){ startSpeaking(); return; }
-  if(/\b(priorit|task|to.?do|what should i)\b/.test(s)){
-    respond("You have "+D.priorities.length+" priorities. "+
-      D.priorities.map((p,i)=>"Number "+(i+1)+": "+p+".").join(" "));
+  /* priority management (must come before the listing branch) */
+  let pm;
+  if((pm = s.match(/\b(?:add|new|log)\s+(?:a\s+)?priority[,:.]?\s+(.+)/))){
+    const pr = getPriorities().slice();
+    pr.push(pm[1].replace(/[.?!]+$/,"").trim());
+    savePriorities(pr);
+    respond("Priority "+pr.length+" logged, sir: "+pr[pr.length-1]+".");
+    return;
+  }
+  if(/\b(?:clear|delete|remove|wipe)\s+(?:all\s+|the\s+)?priorities\b/.test(s)){
+    savePriorities([]);
+    respond("Priority list cleared, sir.");
+    return;
+  }
+  if((pm = s.match(/\b(?:remove|delete|complete|done with)\s+priority\s+(?:number\s+)?(\d+|last|one|two|three|four|five)\b/))){
+    const words = {one:1,two:2,three:3,four:4,five:5};
+    const pr = getPriorities().slice();
+    const idx = pm[1]==="last" ? pr.length-1 : (words[pm[1]]||parseInt(pm[1],10))-1;
+    if(idx>=0 && idx<pr.length){
+      const rem = pr.splice(idx,1)[0];
+      savePriorities(pr);
+      respond("Struck off: "+rem+". "+(pr.length? pr.length+" remaining." : "The list is clear, sir."));
+    } else respond("I don't have that priority number, sir.");
+    return;
+  }
+  if(/\b(priorit|task|to.?do|what should i)/.test(s)){
+    const pr = getPriorities();
+    respond(pr.length
+      ? "You have "+pr.length+(pr.length>1?" priorities. ":" priority. ")+
+        pr.map((p,i)=>"Number "+(i+1)+": "+p+".").join(" ")
+      : "No priorities on file, sir. Say: Jarvis, add priority, followed by the task.");
     return;
   }
   if(/\b(status|systems?|connector|online|diagnostic)\b/.test(s)){
@@ -541,7 +597,8 @@ function handleUtterance(q){
   /* --- browser actions --- */
   const SITES = {
     "youtube":"https://www.youtube.com","youtube studio":"https://studio.youtube.com",
-    "gmail":"https://mail.google.com","google":"https://www.google.com",
+    "gmail":"https://mail.google.com/mail/u/?authuser=wilcherb2870@gmail.com",
+    "google":"https://www.google.com",
     "calendar":"https://calendar.google.com","drive":"https://drive.google.com",
     "docs":"https://docs.google.com","maps":"https://maps.google.com",
     "github":"https://github.com","reddit":"https://www.reddit.com",
@@ -578,6 +635,7 @@ function handleUtterance(q){
   if(/\b(api ?key|configure|settings)\b/.test(s)){ promptApiKey(); return; }
   if(/\b(help|what can you)\b/.test(s)){
     respond("You can ask for the brief, priorities, status, headline, sponsors, or the time. "+
+      "Manage priorities with: add priority, remove priority 2, or clear priorities. "+
       "I can also drive the browser: say 'open YouTube', 'search for' something, or 'play' something on YouTube. "+
       "Say 'always on' or double-click TALK to keep me listening — then say 'Jarvis' before each request. "+
       (getApiKey() ? "And with the uplink active, you may ask me anything, sir."
@@ -616,7 +674,7 @@ async function askClaude(q){
         max_tokens:300,
         system:"You are J.A.R.V.I.S., a composed British AI butler assisting your principal, whom you address as 'sir'. "+
           "Replies are spoken aloud: 1-3 short sentences, plain text, no markdown, no lists, no emoji. Dry wit welcome. "+
-          "Current dashboard data: "+JSON.stringify(window.JARVIS_DATA),
+          "Current dashboard data: "+JSON.stringify(Object.assign({}, window.JARVIS_DATA, {priorities:getPriorities()})),
         messages:chatLog
       })
     });

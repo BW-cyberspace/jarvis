@@ -19,12 +19,14 @@ function briefText() {
   const sandbox = { window: {} };
   vm.runInNewContext(fs.readFileSync(`${__dirname}/jarvis_data.js`, "utf8"), sandbox);
   const d = sandbox.window.JARVIS_DATA;
-  return [
-    d.greeting,
-    "Here is your brief.",
-    ...d.priorities.map((p, i) => `Priority ${i + 1}: ${p}.`),
-    d.closer,
-  ].join(" ");
+  // Salutation matches the time of *generation* — the recording is static, so
+  // re-run this script when you want the greeting to match (e.g. each morning).
+  const h = new Date().getHours();
+  const salute = h < 12 ? "Good morning, sir." : h < 18 ? "Good afternoon, sir." : "Good evening, sir.";
+  const prio = d.priorities && d.priorities.length
+    ? d.priorities.map((p, i) => `Priority ${i + 1}: ${p}.`)
+    : ["No priorities on file."];
+  return [salute, d.greeting, "Here is your brief.", ...prio, d.closer].join(" ");
 }
 
 // Minimal 16-bit PCM mono WAV encoder.

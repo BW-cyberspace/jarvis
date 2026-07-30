@@ -39,6 +39,12 @@ Click **🎙 TALK** (Chrome or Edge — uses the built-in Web Speech API) and sp
   me*, *what are my priorities*, *status report*, *read the headline*,
   *sponsors*, *what time is it*, *help*, *stop*. Answers come from
   `jarvis_data.js`, spoken in a British voice via the browser's own TTS.
+- **Real priorities, by voice** — *"Jarvis, add priority: reply to the sponsor
+  email"* logs it; *"remove priority 2"* (or *"remove priority last"*) strikes
+  one off; *"clear priorities"* wipes the list; *"what are my priorities"* reads
+  them back. They're stored in the browser (localStorage), survive reloads, and
+  feed the HUD counter, the spoken answers, and Claude conversations. The
+  entries in `jarvis_data.js` are only defaults for a fresh browser.
 - **Always-on mode** — double-click **TALK** (or say *"always on"*) and JARVIS
   keeps listening indefinitely: say **"Jarvis"** before each request — *"Jarvis,
   status report"*, *"Jarvis, open YouTube"* — and everything without the wake

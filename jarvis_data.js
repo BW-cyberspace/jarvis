@@ -1,8 +1,10 @@
 // J.A.R.V.I.S. command center — data feed
 // All copy shown in the HUD comes from this file.
 window.JARVIS_DATA = {
-  greeting: "Good evening, sir. All systems nominal.",
-  generated: "2026-07-29",
+  // Time-of-day salutation ("Good morning, sir.") is added live by the
+  // dashboard — this is just the status tail spoken after it.
+  greeting: "All systems nominal.",
+  generated: "2026-07-30",
 
   connectors: [
     { name: "GMAIL",          status: "online"  },
@@ -29,13 +31,10 @@ window.JARVIS_DATA = {
     { name: "AURORA GEAR",  amount: 2800, status: "negotiating" }
   ],
 
-  priorities: [
-    "Reply to Helix Labs — contract redlines expire Friday",
-    "Thumbnail A/B test on \"Mark VII teardown\" ends 18:00",
-    "Stripe connector offline — payouts not syncing",
-    "Record VO for Thursday upload, script locked",
-    "Community post queued — approve before 21:00"
-  ],
+  // Real priorities are managed by voice and stored in the browser:
+  //   "Jarvis, add priority <task>" / "remove priority 2" / "clear priorities"
+  // Entries listed here are only defaults shown when none have been set.
+  priorities: [],
 
   headline: "RETENTION UP 4.2% WEEK-OVER-WEEK — MARK VII TEARDOWN OUTPERFORMING BASELINE BY 31% — STRIPE SYNC DEGRADED — HELIX LABS PAYMENT PENDING",
   closer: "WHAT SHOULD I HANDLE FIRST?"

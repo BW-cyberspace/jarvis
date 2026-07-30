@@ -31,6 +31,14 @@ Click **🎙 TALK** (Chrome or Edge — uses the built-in Web Speech API) and sp
   me*, *what are my priorities*, *status report*, *read the headline*,
   *sponsors*, *what time is it*, *help*, *stop*. Answers come from
   `jarvis_data.js`, spoken in a British voice via the browser's own TTS.
+- **Always-on mode** — double-click **TALK** (or say *"always on"*) and JARVIS
+  keeps listening indefinitely: say **"Jarvis"** before each request — *"Jarvis,
+  status report"*, *"Jarvis, open YouTube"* — and everything without the wake
+  word is ignored. He mutes his own microphone while speaking, re-arms it if
+  Chrome times it out, and remembers the mode across page reloads. Say
+  *"Jarvis, stand down"* (or double-click again) to go back to push-to-talk.
+  The tab keeps the mic active the whole time (red-dot indicator) — Chrome may
+  end it when the tab is fully in the background, so keep the dashboard visible.
 - **Browser commands** — JARVIS can drive the browser by voice: *open
   YouTube* (also Gmail, GitHub, Calendar, Drive, Stripe, Twitch, and more),
   *open some-site.com*, *search for &lt;anything&gt;*, *play &lt;something&gt; on

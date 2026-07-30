@@ -403,12 +403,12 @@ function speakText(text){
   // sentences and queue them — each utterance stays well under the limit.
   const chunks = text.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g) || [text];
   const v = pickVoice();
-  const done = ()=>{ speaking = false; talkBtn.classList.remove("speaking"); };
+  const done = ()=>{ speaking = false; talkBtn.classList.remove("speaking"); setTimeout(resumeMic, 400); };
   chunks.forEach((chunk, i)=>{
     const u = new SpeechSynthesisUtterance(chunk.trim());
     if(v) u.voice = v;
     u.rate = 1.02; u.pitch = 0.92;
-    if(i===0) u.onstart = ()=>{ speaking = true; speakT0 = performance.now(); talkBtn.classList.add("speaking"); };
+    if(i===0) u.onstart = ()=>{ speaking = true; speakT0 = performance.now(); talkBtn.classList.add("speaking"); pauseMic(); };
     if(i===chunks.length-1){ u.onend = done; }
     u.onerror = done;
     speechSynthesis.speak(u);
@@ -422,40 +422,94 @@ function respond(text){
 
 /* --- speech input: Web Speech API (Chrome / Edge) --- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, listening = false;
+let rec = null, listening = false, micPaused = false;
+let wakeMode = localStorage.getItem("jarvis_wake_mode")==="1";
 
-function listen(){
+function setTalkLabel(){
+  talkBtn.classList.toggle("listening", listening);
+  if(listening) talkBtn.innerHTML = wakeMode ? "◉&nbsp; ALWAYS ON" : "●&nbsp; LISTENING";
+  else          talkBtn.innerHTML = wakeMode ? "◌&nbsp; STANDBY"   : "🎙&nbsp; TALK";
+}
+
+function startRec(){
   if(!SR){ respond("Voice input requires Chrome or Edge, sir."); return; }
-  if(listening){ rec && rec.stop(); return; }
-  speechSynthesis.cancel(); stopSpeaking();
+  if(listening || micPaused) return;
   rec = new SR();
   rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1;
-  listening = true;
-  talkBtn.classList.add("listening");
-  talkBtn.innerHTML = "●&nbsp; LISTENING";
+  rec.continuous = wakeMode;   // always-on: keep the session open across pauses
+  listening = true; setTalkLabel();
   rec.onresult = e=>{
-    const q = e.results[0][0].transcript.trim();
-    logLine("You: <b>"+q.replace(/</g,"&lt;")+"</b>");
-    handleUtterance(q);
+    for(let i=e.resultIndex; i<e.results.length; i++){
+      if(!e.results[i].isFinal) continue;
+      let q = e.results[i][0].transcript.trim();
+      if(wakeMode){
+        // ignore everything that doesn't start with the wake word
+        const m = q.match(/^(?:hey |ok |okay )?jarvis[,!.]?\s*(.*)$/i);
+        if(!m) continue;
+        q = m[1].trim();
+        if(!q){ logLine("You: <b>Jarvis</b>"); respond("Sir?"); continue; }
+      }
+      logLine("You: <b>"+q.replace(/</g,"&lt;")+"</b>");
+      handleUtterance(q);
+    }
   };
   rec.onerror = e=>{
-    if(e.error==="not-allowed") respond("I need microphone permission, sir.");
+    if(e.error==="not-allowed"){
+      wakeMode = false; localStorage.removeItem("jarvis_wake_mode");
+      respond("I need microphone permission, sir.");
+    }
     else if(e.error!=="aborted" && e.error!=="no-speech") logLine("Mic error: <b>"+e.error+"</b>");
   };
   rec.onend = ()=>{
-    listening = false;
-    talkBtn.classList.remove("listening");
-    talkBtn.innerHTML = "🎙&nbsp; TALK";
+    listening = false; setTalkLabel();
+    // Chrome ends continuous sessions after a while — quietly re-arm
+    if(wakeMode && !micPaused) setTimeout(()=>{ if(wakeMode && !micPaused && !listening) startRec(); }, 250);
   };
-  rec.start();
+  try{ rec.start(); }catch(_){ listening = false; setTalkLabel(); }
 }
-talkBtn.addEventListener("click", listen);
+function stopRec(){ if(rec){ try{ rec.abort(); }catch(_){} } listening = false; setTalkLabel(); }
+
+/* mute JARVIS's own ears while he speaks, so he doesn't answer himself */
+function pauseMic(){ micPaused = true; if(listening) stopRec(); }
+function resumeMic(){ micPaused = false; if(wakeMode && !listening) startRec(); }
+audio.addEventListener("play",  pauseMic);
+audio.addEventListener("ended", ()=> setTimeout(resumeMic, 400));
+audio.addEventListener("pause", ()=> setTimeout(resumeMic, 400));
+
+function setWakeMode(on){
+  wakeMode = on;
+  if(on){
+    localStorage.setItem("jarvis_wake_mode","1");
+    stopRec();
+    respond("Always-on mode engaged. Say 'Jarvis' before each request. Say 'Jarvis, stand down' when you're done.");
+    setTimeout(()=>{ if(wakeMode && !listening && !micPaused) startRec(); }, 1500); // safety net if TTS events don't fire
+  } else {
+    localStorage.removeItem("jarvis_wake_mode");
+    stopRec();
+    respond("Standing down, sir.");
+  }
+  setTalkLabel();
+}
+
+let lastClick = 0;
+talkBtn.addEventListener("click", ()=>{
+  const now = Date.now();
+  if(now - lastClick < 350){ lastClick = 0; setWakeMode(!wakeMode); return; }  // double-click toggles always-on
+  lastClick = now;
+  if(wakeMode){ if(!listening && !micPaused) startRec(); return; }
+  if(listening) stopRec();
+  else { speechSynthesis.cancel(); stopSpeaking(); startRec(); }
+});
+setTalkLabel();
+if(wakeMode) setTimeout(startRec, 800);   // resume always-on across page reloads
 
 /* --- command brain: free, offline --- */
 function handleUtterance(q){
   const s = q.toLowerCase();
   const offline = D.connectors.filter(c=>c.status!=="online").map(c=>c.name);
 
+  if(/\b(always ?on|wake mode|keep listening|stay listening)\b/.test(s)){ setWakeMode(true); return; }
+  if(/\b(stand down|go to sleep|stop listening|standby)\b/.test(s)){ setWakeMode(false); return; }
   if(/\b(stop|quiet|cancel|never ?mind|shut up)\b/.test(s)){
     speechSynthesis.cancel(); stopSpeaking(); return;
   }
@@ -525,6 +579,7 @@ function handleUtterance(q){
   if(/\b(help|what can you)\b/.test(s)){
     respond("You can ask for the brief, priorities, status, headline, sponsors, or the time. "+
       "I can also drive the browser: say 'open YouTube', 'search for' something, or 'play' something on YouTube. "+
+      "Say 'always on' or double-click TALK to keep me listening — then say 'Jarvis' before each request. "+
       (getApiKey() ? "And with the uplink active, you may ask me anything, sir."
                    : "Say 'set API key' to activate the full conversational uplink, sir."));
     return;

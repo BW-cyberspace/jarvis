@@ -20,8 +20,16 @@ embedded as data URIs, so it works fully offline.
 
 ## Run
 
-Just open `dashboard.html`. Click **BRIEF ME** — the sphere pulses to a
-speech envelope; if `jarvis_brief.wav` (or `.mp3`) exists it plays too.
+**Recommended:** double-click `start-jarvis.bat` (or run `npm start`). It
+serves the dashboard at http://localhost:1963 and opens it. On a real origin
+Chrome remembers microphone and pop-up permissions permanently — you click
+Allow once, ever. Keep the minimized server window open while JARVIS runs.
+
+Opening `dashboard.html` directly from disk still works, but Chrome re-asks
+for the microphone on every visit (file:// permissions are never persisted).
+
+Click **BRIEF ME** — the sphere pulses to a speech envelope; if
+`jarvis_brief.wav` (or `.mp3`) exists it plays too.
 
 ## Talk to JARVIS
 
